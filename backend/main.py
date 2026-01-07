@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import routes
-from routes import auth, products, cart, orders, reviews, tryOn
+from routes import auth, products, cart, orders, reviews, tryOn, wishlist
 
 app = FastAPI(
     title="AI Shopping API",
@@ -37,6 +37,7 @@ app.include_router(cart.router, prefix="/cart", tags=["Cart"])
 app.include_router(orders.router, prefix="/orders", tags=["Orders"])
 app.include_router(reviews.router, prefix="/reviews", tags=["Reviews"])
 app.include_router(tryOn.router, prefix="/tryOn", tags=["Virtual Try-On"])
+app.include_router(wishlist.router, prefix="/wishlist", tags=["Wishlist"])
 
 @app.get("/health")
 async def health_check():
