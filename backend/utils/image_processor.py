@@ -8,6 +8,7 @@ import base64
 from datetime import datetime
 import uuid
 
+
 class ImageProcessor:
     MAX_SIZE = 5 * 1024 * 1024  # 5MB
     ALLOWED_FORMATS = {'JPEG', 'PNG', 'JPG'}
@@ -20,7 +21,7 @@ class ImageProcessor:
         try:
             img = Image.open(BytesIO(file_data))
             return img.format in ImageProcessor.ALLOWED_FORMATS
-        except:
+        except Exception:
             return False
 
     @staticmethod
@@ -30,7 +31,7 @@ class ImageProcessor:
             img = Image.open(BytesIO(file_data))
             if img.mode == 'RGBA':
                 img = img.convert('RGB')
-            
+
             output = BytesIO()
             img.save(output, format='JPEG', quality=quality, optimize=True)
             return output.getvalue()
@@ -49,22 +50,22 @@ class ImageProcessor:
 
     @staticmethod
     def optimize_for_upload(image_bytes: bytes, max_size: int = 1024) -> bytes:
-    """Compress and resize image before upload"""
-    img = Image.open(BytesIO(image_bytes))
-    
-    # Resize if needed
-    if img.width > max_size or img.height > max_size:
-        img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-    
-    # Convert RGBA to RGB
-    if img.mode == 'RGBA':
-        img = img.convert('RGB')
-    
-    # Compress
-    output = BytesIO()
-    img.save(output, format='JPEG', quality=85, optimize=True)
-    return output.getvalue()
-    
+        """Compress and resize image before upload"""
+        img = Image.open(BytesIO(image_bytes))
+
+        # Resize if needed
+        if img.width > max_size or img.height > max_size:
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+        # Convert RGBA to RGB
+        if img.mode == 'RGBA':
+            img = img.convert('RGB')
+
+        # Compress
+        output = BytesIO()
+        img.save(output, format='JPEG', quality=85, optimize=True)
+        return output.getvalue()
+
     @staticmethod
     def convert_from_base64(base64_str: str) -> bytes:
         """Convert base64 string to image bytes"""
