@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends
 from middleware.auth_middleware import get_current_user
+from supabase import create_client, Client
 import os
 import requests
 
 router = APIRouter()
+supabase: Client = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+)
 
 @router.post("/suggestions")
 async def get_style_suggestions(
