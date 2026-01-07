@@ -39,18 +39,18 @@ async def get_products(
     response = query.range(offset, offset + limit - 1).execute()
     return response.data
 
+@router.get(""/search/query"")
+async def search_products(q: str = Query(..., min_length=1)):
+    response = supabase.table("products").select("*").ilike(
+        "name", f"%{q}%"
+    ).execute()
+    return response.data
+
 @router.get("/{product_id}", response_model=Product)
 async def get_product(product_id: str):
     response = supabase.table("products").select("*").eq(
         "id", product_id
     ).single().execute()
-    return response.data
-
-@router.get("/search")
-async def search_products(q: str = Query(..., min_length=1)):
-    response = supabase.table("products").select("*").ilike(
-        "name", f"%{q}%"
-    ).execute()
     return response.data
 
 @router.get("/category/{category_name}")
