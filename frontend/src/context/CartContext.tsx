@@ -68,7 +68,19 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return sum + (price * item.quantity)
     }, 0)
   }
-
+  useEffect(() => {
+  const loadCart = async () => {
+    if (user) {
+      try {
+        const response = await cartAPI.get()
+        setItems(response.data)
+      } catch (error) {
+        console.error('Failed to load cart:', error)
+      }
+    }
+  }
+  loadCart()
+  }, [user])
   return (
     <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, getTotal }}>
       {children}
