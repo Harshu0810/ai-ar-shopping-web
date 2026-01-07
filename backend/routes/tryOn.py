@@ -22,7 +22,7 @@ supabase: Client = create_client(
 HF_API_KEY = os.getenv("HUGGING_FACE_API_KEY")
 HF_API_URL = "https://api-inference.huggingface.co/models/ZeroGPU/stable-diffusion-v1-5"
 
-@router.post("/tryOn/generate")
+@router.post("/generate")
 async def generate_tryon(
     user_image: UploadFile = File(...),
     product_id: str = Form(...),
