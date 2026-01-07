@@ -3,6 +3,7 @@
 
 import React, { createContext, useState, ReactNode } from 'react'
 import { cartAPI } from '../services/api'
+import { useAuth } from '../hooks/useAuth'
 
 interface CartItem {
   id: string
@@ -28,6 +29,7 @@ export const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>([])
+  const { user } = useAuth()
 
   const addToCart = async (productId: string, quantity: number) => {
     try {
