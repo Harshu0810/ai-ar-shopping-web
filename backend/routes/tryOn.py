@@ -1,7 +1,8 @@
 # BACKEND: routes/tryOn.py
 # ============================================================================
 
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException
+from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends
+from middleware.auth_middleware import get_current_user
 from pydantic import BaseModel
 import os
 import io
