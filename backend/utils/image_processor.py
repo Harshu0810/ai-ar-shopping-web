@@ -48,6 +48,24 @@ class ImageProcessor:
         return base64.b64encode(file_data).decode('utf-8')
 
     @staticmethod
+    def optimize_for_upload(image_bytes: bytes, max_size: int = 1024) -> bytes:
+    """Compress and resize image before upload"""
+    img = Image.open(BytesIO(image_bytes))
+    
+    # Resize if needed
+    if img.width > max_size or img.height > max_size:
+        img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+    
+    # Convert RGBA to RGB
+    if img.mode == 'RGBA':
+        img = img.convert('RGB')
+    
+    # Compress
+    output = BytesIO()
+    img.save(output, format='JPEG', quality=85, optimize=True)
+    return output.getvalue()
+    
+    @staticmethod
     def convert_from_base64(base64_str: str) -> bytes:
         """Convert base64 string to image bytes"""
         return base64.b64decode(base64_str)
