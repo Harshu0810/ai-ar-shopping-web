@@ -5,15 +5,15 @@ uvicorn[standard]==0.27.0
 # Environment & Configuration
 python-dotenv==1.0.0
 
-# Database & Backend Services
-supabase==2.2.0
+# Database & Backend Services (Updated version)
+supabase==2.9.0
 
 # File Upload
 python-multipart==0.0.6
 
-# HTTP Requests
+# HTTP Requests (Compatible versions)
 requests==2.31.0
-httpx==0.24.1
+httpx==0.27.0
 
 # Data Validation (Pydantic v2)
 pydantic==2.5.3
