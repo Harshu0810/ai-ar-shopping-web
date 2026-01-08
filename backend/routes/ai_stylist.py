@@ -1,53 +1,70 @@
-from fastapi import APIRouter, Depends
+# BACKEND: routes/ai_stylist.py
+# ============================================================================
+
+from fastapi import APIRouter, Depends, HTTPException
 from middleware.auth_middleware import get_current_user
-from supabase import create_client, Client
 import os
-import requests
 
 router = APIRouter()
-supabase: Client = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-)
 
 @router.post("/suggestions")
 async def get_style_suggestions(
     data: dict,
     current_user: dict = Depends(get_current_user)
 ):
-    skin_tone = data.get("skin_tone")
-    occasion = data.get("occasion")
+    # Normalize inputs (handle upper/lowercase)
+    skin_tone = data.get("skin_tone", "").lower().strip()
+    occasion = data.get("occasion", "").lower().strip()
     
-    # Option 1: Use OpenAI API (paid)
-    # Option 2: Use Hugging Face free models
-    # Option 3: Use rule-based logic (free)
-    
-    # Rule-based implementation (free):
-    color_recommendations = {
+    # 1. Stylist Knowledge Base
+    style_rules = {
         "fair": {
-            "casual": ["navy", "burgundy", "forest green"],
-            "formal": ["charcoal", "navy", "burgundy"],
-            "party": ["jewel tones", "rose gold", "silver"]
+            "colors": ["Emerald Green", "Navy Blue", "Camel", "Soft Pink"],
+            "tip": "Contrast is your friend. Darker colors make your features pop."
+        },
+        "light": {
+            "colors": ["Emerald Green", "Navy Blue", "Charcoal", "Burgundy"],
+            "tip": "Rich, cool tones will complement your undertones best."
         },
         "medium": {
-            "casual": ["coral", "teal", "mustard"],
-            "formal": ["navy", "emerald", "burgundy"],
-            "party": ["gold", "ruby", "sapphire"]
+            "colors": ["Metallic Gold", "Royal Blue", "Beige", "Earth Tones"],
+            "tip": "Warm earth tones and vibrant jewel tones look fantastic on you."
         },
-        # ... more combinations
+        "tan": {
+            "colors": ["Rose Gold", "Plum", "Emerald", "Burnt Orange"],
+            "tip": "Highlight your natural glow with shades of pink and deep greens."
+        },
+        "olive": {
+            "colors": ["Rose Gold", "Plum", "Emerald", "Burnt Orange"],
+            "tip": "Highlight your natural glow with shades of pink and deep greens."
+        },
+        "dark": {
+            "colors": ["Cobalt Blue", "Bright White", "Ruby Red", "Gold"],
+            "tip": "Bright, bold colors look stunning against your skin. Don't be afraid to stand out!"
+        },
+        "deep": {
+            "colors": ["Yellow", "Bright White", "Fuchsia", "Silver"],
+            "tip": "High-contrast colors look amazing. Avoid browns that match your skin tone too closely."
+        }
     }
     
-    colors = color_recommendations.get(skin_tone, {}).get(occasion, [])
+    # 2. Fallback if skin tone isn't found (Default to Medium logic)
+    rule = style_rules.get(skin_tone)
+    if not rule:
+        # Try to match partially (e.g. "very fair" -> "fair")
+        for key in style_rules:
+            if key in skin_tone:
+                rule = style_rules[key]
+                break
+        if not rule:
+            rule = style_rules["medium"] # Final default
+
+    # 3. Generate Suggestions
+    suggestions = [
+        f"For a {occasion} look with {skin_tone} skin, we highly recommend wearing {rule['colors'][0]} or {rule['colors'][1]}.",
+        f"Try accessorizing with {rule['colors'][2]} to elevate your style.",
+        f"Stylist Tip: {rule['tip']}",
+        f"Why it works: These colors create the perfect contrast for your complexion."
+    ]
     
-    # Fetch matching products
-    matching_products = supabase.table("products").select("*").in_(
-        "color", colors
-    ).limit(10).execute()
-    
-    return {
-        "suggestions": [
-            f"Try {color} colored items for your {occasion} look"
-            for color in colors
-        ],
-        "recommended_products": matching_products.data
-    }
+    return {"suggestions": suggestions}
