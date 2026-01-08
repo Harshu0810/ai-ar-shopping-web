@@ -28,3 +28,5 @@ PyJWT==2.8.0
 
 # Image Processing
 Pillow==10.2.0
+
+gradio_client==0.8.0
