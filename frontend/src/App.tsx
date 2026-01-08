@@ -23,8 +23,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading...</p>
+        </div>
       </div>
     )
   }
@@ -41,7 +44,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <CartProvider>
-          <div className="flex flex-col min-h-screen">
+          <div className="flex flex-col min-h-screen bg-gray-50">
             <Header />
             <NavigationBar />
             <main className="flex-grow">
@@ -99,11 +102,14 @@ function App() {
                 <Route 
                   path="*" 
                   element={
-                    <div className="min-h-screen flex items-center justify-center">
+                    <div className="min-h-screen flex items-center justify-center bg-gray-50">
                       <div className="text-center">
-                        <h1 className="text-6xl font-bold text-gray-300 mb-4">404</h1>
-                        <p className="text-xl text-gray-600 mb-8">Page not found</p>
-                        <Link to="/" className="bg-primary text-white px-6 py-3 rounded-lg">
+                        <h1 className="text-8xl font-bold text-gray-300 mb-4">404</h1>
+                        <p className="text-2xl text-gray-600 mb-8">Page not found</p>
+                        <Link 
+                          to="/" 
+                          className="inline-block bg-primary text-white px-8 py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
+                        >
                           Go Home
                         </Link>
                       </div>
