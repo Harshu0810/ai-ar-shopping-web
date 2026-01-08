@@ -4,6 +4,7 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../hooks/useAuth'
+import { stylistAPI } from '../services/api' // Import the real API
 import { Sparkles, AlertCircle } from 'lucide-react'
 
 export default function AIStylist() {
@@ -21,16 +22,17 @@ export default function AIStylist() {
 
     setLoading(true)
     try {
-      // Mock AI suggestions (in production, call backend)
-      const mockSuggestions = [
-        `Warm colors like ${skinTone === 'fair' ? 'rose gold and jewel tones' : 'coral and gold'} would complement your ${skinTone} skin tone`,
-        `For ${occasion}, consider elegant layers and neutral base colors`,
-        `Metallic accents in ${skinTone === 'fair' ? 'silver' : 'gold'} would enhance your overall look`,
-        `Try a ${skinTone === 'fair' ? 'burgundy or navy' : 'emerald or rust'} color for a sophisticated appearance`
-      ]
-      setSuggestions(mockSuggestions)
+      // CHANGED: Call the Real Backend API instead of mock
+      const response = await stylistAPI.getSuggestions(skinTone, occasion)
+      
+      if (response.data && response.data.suggestions) {
+        setSuggestions(response.data.suggestions)
+      } else {
+        setSuggestions(["Could not generate suggestions. Please try again."])
+      }
     } catch (error) {
       console.error('Failed to get suggestions:', error)
+      alert('Failed to connect to AI Stylist. Check backend.')
     } finally {
       setLoading(false)
     }
@@ -50,46 +52,58 @@ export default function AIStylist() {
       animate={{ opacity: 1 }}
       className="min-h-screen bg-light dark:bg-dark py-12 px-4"
     >
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8 text-center text-dark dark:text-light">
-          <Sparkles className="w-10 h-10 inline mr-2" />
-          AI Stylist
-        </h1>
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold mb-4 flex items-center justify-center text-dark dark:text-light">
+            <Sparkles className="w-8 h-8 text-secondary mr-3" />
+            AI Personal Stylist
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300">
+            Get personalized fashion advice based on your skin tone and occasion
+          </p>
+        </div>
 
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg"
+          initial={{ y: 20 }}
+          animate={{ y: 0 }}
+          className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8"
         >
           <div className="space-y-6">
             <div>
-              <label className="block text-lg font-semibold mb-3">Skin Tone</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Your Skin Tone
+              </label>
               <select
                 value={skinTone}
                 onChange={(e) => setSkinTone(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               >
-                <option value="">Select your skin tone...</option>
-                <option value="fair">Fair</option>
-                <option value="medium">Medium</option>
+                <option value="">Select skin tone...</option>
+                <option value="fair">Fair / Pale</option>
+                <option value="light">Light</option>
+                <option value="medium">Medium / Wheatish</option>
                 <option value="olive">Olive</option>
-                <option value="deep">Deep</option>
+                <option value="tan">Tan</option>
+                <option value="dark">Dark</option>
+                <option value="deep">Deep / Ebony</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-lg font-semibold mb-3">Occasion</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Occasion
+              </label>
               <select
                 value={occasion}
                 onChange={(e) => setOccasion(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="">Select occasion...</option>
-                <option value="casual">Casual</option>
-                <option value="professional">Professional</option>
-                <option value="party">Party</option>
-                <option value="formal">Formal</option>
-                <option value="wedding">Wedding</option>
+                <option value="casual">Casual Day Out</option>
+                <option value="professional">Office / Professional</option>
+                <option value="party">Party / Night Out</option>
+                <option value="wedding">Wedding / Festive</option>
+                <option value="formal">Formal Event</option>
               </select>
             </div>
 
@@ -99,7 +113,7 @@ export default function AIStylist() {
               disabled={loading}
               className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition"
             >
-              {loading ? 'Getting Suggestions...' : 'Get Style Suggestions'}
+              {loading ? 'Analyzing...' : 'Get Style Suggestions'}
             </motion.button>
           </div>
 
@@ -109,11 +123,11 @@ export default function AIStylist() {
               animate={{ opacity: 1 }}
               className="mt-8 space-y-4"
             >
-              <h2 className="text-2xl font-bold mb-4">Your Style Suggestions</h2>
+              <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Your Style Suggestions</h2>
               {suggestions.map((suggestion, index) => (
                 <div
                   key={index}
-                  className="p-4 bg-gradient-to-r from-primary to-secondary text-white rounded-lg"
+                  className="p-4 bg-gradient-to-r from-primary to-secondary text-white rounded-lg shadow-md"
                 >
                   {suggestion}
                 </div>
