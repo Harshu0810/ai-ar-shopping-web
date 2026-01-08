@@ -10,7 +10,8 @@ export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  timeout: 120000 
 })
 
 // Request interceptor - Add JWT token from Supabase session
