@@ -1,7 +1,7 @@
 // frontend/src/context/CartContext.tsx
 // ============================================================================
 
-import React, { createContext, useState, ReactNode } from 'react'
+import React, { createContext, useState, useEffect, ReactNode } from 'react'
 import { cartAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 
@@ -23,6 +23,7 @@ interface CartContextType {
   updateQuantity: (itemId: string, quantity: number) => Promise<void>
   clearCart: () => void
   getTotal: () => number
+  refreshCart: () => Promise<void>
 }
 
 export const CartContext = createContext<CartContextType | undefined>(undefined)
@@ -31,12 +32,43 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [items, setItems] = useState<CartItem[]>([])
   const { user } = useAuth()
 
+  // Load cart when user logs in
+  useEffect(() => {
+    const loadCart = async () => {
+      if (user) {
+        try {
+          const response = await cartAPI.get()
+          setItems(response.data)
+        } catch (error) {
+          console.error('Failed to load cart:', error)
+        }
+      } else {
+        // Clear cart when user logs out
+        setItems([])
+      }
+    }
+    loadCart()
+  }, [user])
+
+  const refreshCart = async () => {
+    if (user) {
+      try {
+        const response = await cartAPI.get()
+        setItems(response.data)
+      } catch (error) {
+        console.error('Failed to refresh cart:', error)
+      }
+    }
+  }
+
   const addToCart = async (productId: string, quantity: number) => {
     try {
-      const response = await cartAPI.add(productId, quantity)
-      setItems([...items, response.data])
+      await cartAPI.add(productId, quantity)
+      // Refresh cart from server to get updated data
+      await refreshCart()
     } catch (error) {
       console.error('Failed to add to cart:', error)
+      throw error
     }
   }
 
@@ -46,6 +78,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setItems(items.filter(item => item.id !== itemId))
     } catch (error) {
       console.error('Failed to remove from cart:', error)
+      throw error
     }
   }
 
@@ -57,6 +90,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ))
     } catch (error) {
       console.error('Failed to update quantity:', error)
+      throw error
     }
   }
 
@@ -70,21 +104,17 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return sum + (price * item.quantity)
     }, 0)
   }
-  useEffect(() => {
-  const loadCart = async () => {
-    if (user) {
-      try {
-        const response = await cartAPI.get()
-        setItems(response.data)
-      } catch (error) {
-        console.error('Failed to load cart:', error)
-      }
-    }
-  }
-  loadCart()
-  }, [user])
+
   return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, getTotal }}>
+    <CartContext.Provider value={{ 
+      items, 
+      addToCart, 
+      removeFromCart, 
+      updateQuantity, 
+      clearCart, 
+      getTotal,
+      refreshCart 
+    }}>
       {children}
     </CartContext.Provider>
   )
