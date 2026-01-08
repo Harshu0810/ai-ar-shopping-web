@@ -9,12 +9,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import routes
-from routes import auth, products, cart, orders, reviews, tryOn, wishlist
+from routes import auth, products, cart, orders, reviews, tryOn, wishlist, ai_stylist
 
 app = FastAPI(
     title="AI Shopping API",
     description="E-commerce API with AI Virtual Try-On",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # CORS Configuration
@@ -23,6 +25,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000",
+        "http://127.0.0.1:5173",
         os.getenv("FRONTEND_URL", "https://your-app.vercel.app")
     ],
     allow_credentials=True,
@@ -38,19 +41,48 @@ app.include_router(orders.router, prefix="/orders", tags=["Orders"])
 app.include_router(reviews.router, prefix="/reviews", tags=["Reviews"])
 app.include_router(tryOn.router, prefix="/tryOn", tags=["Virtual Try-On"])
 app.include_router(wishlist.router, prefix="/wishlist", tags=["Wishlist"])
-
-@app.get("/health")
-async def health_check():
-    return {"status": "ok", "message": "API is running"}
+app.include_router(ai_stylist.router, prefix="/ai-stylist", tags=["AI Stylist"])
 
 @app.get("/")
 async def root():
+    """Root endpoint"""
     return {
         "message": "AI Shopping API",
+        "version": "1.0.0",
         "docs": "/docs",
-        "version": "1.0.0"
+        "status": "running"
+    }
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "message": "API is running"
+    }
+
+# Error handlers
+@app.exception_handler(404)
+async def not_found_handler(request, exc):
+    return {
+        "error": "Not Found",
+        "message": "The requested resource was not found",
+        "path": str(request.url)
+    }
+
+@app.exception_handler(500)
+async def internal_error_handler(request, exc):
+    return {
+        "error": "Internal Server Error",
+        "message": "An unexpected error occurred"
     }
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=True
+    )
