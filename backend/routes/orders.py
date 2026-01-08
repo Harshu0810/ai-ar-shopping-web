@@ -1,14 +1,14 @@
-
 # BACKEND: routes/orders.py
 # ============================================================================
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List
 from datetime import datetime
 import uuid
 import os
 from supabase import create_client, Client
+from middleware.auth_middleware import get_current_user # <--- IMPORT ADDED
 
 router = APIRouter()
 supabase: Client = create_client(
@@ -22,9 +22,11 @@ class OrderCreate(BaseModel):
     shipping_address: str
 
 @router.post("/")
-async def create_order(order: OrderCreate, user_id: str = None):
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+async def create_order(
+    order: OrderCreate, 
+    current_user: dict = Depends(get_current_user) # <--- SECURE DEPENDENCY
+):
+    user_id = current_user["id"]
     
     try:
         # Calculate total
@@ -59,29 +61,41 @@ async def create_order(order: OrderCreate, user_id: str = None):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/")
-async def get_orders(user_id: str = None):
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+async def get_orders(current_user: dict = Depends(get_current_user)): # <--- FIXED HERE
+    """Get orders for the logged-in user"""
+    user_id = current_user["id"]
     
     response = supabase.table("orders").select(
         "*, order_items(*, products(*))"
-    ).eq("user_id", user_id).execute()
+    ).eq("user_id", user_id).order("created_at", desc=True).execute()
     
     return response.data
 
 @router.get("/{order_id}")
-async def get_order(order_id: str):
+async def get_order(
+    order_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get single order details"""
+    # Verify the order belongs to this user
     response = supabase.table("orders").select(
         "*, order_items(*, products(*))"
-    ).eq("id", order_id).single().execute()
+    ).eq("id", order_id).eq("user_id", current_user["id"]).single().execute()
     
+    if not response.data:
+         raise HTTPException(status_code=404, detail="Order not found")
+
     return response.data
 
 @router.patch("/{order_id}")
-async def update_order(order_id: str, status: str):
+async def update_order(
+    order_id: str, 
+    status: str,
+    current_user: dict = Depends(get_current_user)
+):
+    # Only allow updates if authorized (add admin check here if needed)
     response = supabase.table("orders").update({
-        "order_status": status,
-        "updated_at": datetime.utcnow().isoformat()
-    }).eq("id", order_id).execute()
+        "order_status": status
+    }).eq("id", order_id).eq("user_id", current_user["id"]).execute()
     
-    return response.data[0]
+    return response.data
