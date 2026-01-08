@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from middleware.auth_middleware import get_current_user
 import os
@@ -10,66 +10,57 @@ supabase: Client = create_client(
     os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 )
 
-# ============================================================================
-# SECURE CART ROUTES
-# ============================================================================
-
 class CartItem(BaseModel):
     product_id: str
     quantity: int
 
-@router.get("/cart")
+# CHANGED: Removed "/cart" prefix because main.py already adds it
+@router.get("/") 
 async def get_cart(current_user: dict = Depends(get_current_user)):
-    """Get user's cart - now secure with JWT validation"""
+    """Get user's cart"""
     response = supabase.table("cart_items").select(
         "*, products(*)"
     ).eq("user_id", current_user["id"]).execute()
-    
     return response.data
 
-@router.post("/cart/items")
+@router.post("/items")
 async def add_to_cart(
     item: CartItem, 
     current_user: dict = Depends(get_current_user)
 ):
-    """Add item to cart - user ID from JWT token"""
-    response = supabase.table("cart_items").upsert({
-        "user_id": current_user["id"],
-        "product_id": item.product_id,
-        "quantity": item.quantity
-    }).execute()
+    """Add item to cart"""
+    # Check if item exists to update quantity instead of erroring
+    existing = supabase.table("cart_items").select("*").eq("user_id", current_user["id"]).eq("product_id", item.product_id).execute()
     
-    return response.data[0]
+    if existing.data:
+        # Update existing
+        new_quantity = existing.data[0]['quantity'] + item.quantity
+        response = supabase.table("cart_items").update({"quantity": new_quantity}).eq("id", existing.data[0]['id']).execute()
+    else:
+        # Insert new
+        response = supabase.table("cart_items").insert({
+            "user_id": current_user["id"],
+            "product_id": item.product_id,
+            "quantity": item.quantity
+        }).execute()
+    
+    return response.data[0] if response.data else {}
 
-@router.put("/cart/items/{item_id}")
+@router.put("/items/{item_id}")
 async def update_cart_item(
     item_id: str, 
     item: CartItem,
     current_user: dict = Depends(get_current_user)
 ):
-    """Update cart item - verify ownership"""
-    # First check if item belongs to user
-    existing = supabase.table("cart_items").select("*").eq(
-        "id", item_id
-    ).eq("user_id", current_user["id"]).single().execute()
-    
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Cart item not found")
-    
     response = supabase.table("cart_items").update({
         "quantity": item.quantity
-    }).eq("id", item_id).execute()
-    
-    return response.data[0]
+    }).eq("id", item_id).eq("user_id", current_user["id"]).execute()
+    return response.data
 
-@router.delete("/cart/items/{item_id}")
+@router.delete("/items/{item_id}")
 async def remove_from_cart(
     item_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Remove item from cart - verify ownership"""
-    supabase.table("cart_items").delete().eq(
-        "id", item_id
-    ).eq("user_id", current_user["id"]).execute()
-    
+    supabase.table("cart_items").delete().eq("id", item_id).eq("user_id", current_user["id"]).execute()
     return {"message": "Item removed"}
