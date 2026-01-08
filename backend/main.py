@@ -9,14 +9,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import routes
-from routes import auth, products, cart, orders, reviews, tryOn, wishlist, ai_stylist
+from routes import auth, products, cart, orders, reviews, tryOn, wishlist
+
+# Import AI Stylist if file exists
+try:
+    from routes import ai_stylist
+    HAS_AI_STYLIST = True
+except ImportError:
+    HAS_AI_STYLIST = False
 
 app = FastAPI(
     title="AI Shopping API",
     description="E-commerce API with AI Virtual Try-On",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    version="1.0.0"
 )
 
 # CORS Configuration
@@ -25,8 +30,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        os.getenv("FRONTEND_URL", "https://your-app.vercel.app")
+        os.getenv("FRONTEND_URL", "https://your-app.vercel.app"),
+        "*"  # Allow all origins for development - REMOVE IN PRODUCTION
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -41,48 +46,23 @@ app.include_router(orders.router, prefix="/orders", tags=["Orders"])
 app.include_router(reviews.router, prefix="/reviews", tags=["Reviews"])
 app.include_router(tryOn.router, prefix="/tryOn", tags=["Virtual Try-On"])
 app.include_router(wishlist.router, prefix="/wishlist", tags=["Wishlist"])
-app.include_router(ai_stylist.router, prefix="/ai-stylist", tags=["AI Stylist"])
 
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "message": "AI Shopping API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "status": "running"
-    }
+# Add AI Stylist if available
+if HAS_AI_STYLIST:
+    app.include_router(ai_stylist.router, prefix="/ai-stylist", tags=["AI Stylist"])
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "message": "API is running"
-    }
+    return {"status": "ok", "message": "API is running"}
 
-# Error handlers
-@app.exception_handler(404)
-async def not_found_handler(request, exc):
+@app.get("/")
+async def root():
     return {
-        "error": "Not Found",
-        "message": "The requested resource was not found",
-        "path": str(request.url)
-    }
-
-@app.exception_handler(500)
-async def internal_error_handler(request, exc):
-    return {
-        "error": "Internal Server Error",
-        "message": "An unexpected error occurred"
+        "message": "AI Shopping API",
+        "docs": "/docs",
+        "version": "1.0.0"
     }
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=True
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)
