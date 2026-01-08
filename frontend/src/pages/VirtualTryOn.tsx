@@ -1,3 +1,6 @@
+// frontend/src/pages/VirtualTryOn.tsx
+// ============================================================================
+
 import React, { useState, useRef, useEffect } from 'react'
 import { tryOnAPI, productAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -14,11 +17,13 @@ interface TryOnResult {
   error?: string
 }
 
+// FIX: Added 'category' to the interface so TypeScript knows it exists
 interface Product {
   id: string
   name: string
   price: number
   image_url: string
+  category: string 
 }
 
 export default function VirtualTryOn() {
@@ -38,57 +43,40 @@ export default function VirtualTryOn() {
     const fetchProducts = async () => {
       try {
         const response = await productAPI.getAll({ limit: 50 })
-        const clothingProducts = response.data.filter((p: Product) => 
-          p.category === 'clothing'
-        )
+        // Now valid because Product interface includes 'category'
+        const clothingProducts = response.data.filter((p: Product) => p.category === 'clothing')
         setProducts(clothingProducts)
-
-        // Auto-select product if passed from product detail page
-        const productId = location.state?.productId
-        if (productId && clothingProducts.some((p: Product) => p.id === productId)) {
-          setSelectedProduct(productId)
+        
+        // Check if product was passed from navigation state
+        if (location.state?.selectedProduct) {
+          setSelectedProduct(location.state.selectedProduct)
         }
       } catch (error) {
         console.error('Failed to fetch products:', error)
-        setError('Failed to load products. Please refresh.')
       }
     }
-
-    if (user) {
-      fetchProducts()
-    }
-  }, [user, location.state])
+    fetchProducts()
+  }, [location.state])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setError('Please select an image file (JPG, PNG)')
-        return
-      }
-
-      // Validate file size (max 5MB)
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0]
       if (file.size > 5 * 1024 * 1024) {
-        setError('Image size should be less than 5MB')
+        alert('File size must be less than 5MB')
         return
       }
-
       setSelectedFile(file)
+      // Create local preview
+      const url = URL.createObjectURL(file)
+      setPreviewUrl(url)
+      setResult(null) // Reset previous result
       setError('')
-      
-      // Create preview
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result as string)
-      }
-      reader.readAsDataURL(file)
     }
   }
 
   const handleGenerate = async () => {
     if (!selectedFile || !selectedProduct) {
-      setError('Please select both an image and a product')
+      alert('Please upload a photo and select a product')
       return
     }
 
@@ -101,22 +89,24 @@ export default function VirtualTryOn() {
       formData.append('user_image', selectedFile)
       formData.append('product_id', selectedProduct)
 
-      console.log('Sending try-on request...')
       const response = await tryOnAPI.generate(formData)
       
-      console.log('Try-on response:', response.data)
-
-      if (response.data.success === false) {
-        setError(response.data.error || 'Try-on generation failed')
-      } else {
+      if (response.data.success) {
         setResult(response.data)
+      } else {
+        // Handle backend-reported error (e.g. AI service busy)
+        setError(response.data.error || 'Generation failed')
+        // Show fallback images if available
+        if (response.data.original_image) {
+           setResult({
+             success: false,
+             ...response.data
+           })
+        }
       }
     } catch (err: any) {
-      console.error('Try-on generation error:', err)
-      const errorMessage = err.response?.data?.detail || 
-                          err.message || 
-                          'Failed to generate try-on. Please try again.'
-      setError(errorMessage)
+      console.error('Try-on failed:', err)
+      setError(err.response?.data?.detail || 'Failed to connect to server')
     } finally {
       setLoading(false)
     }
@@ -126,234 +116,179 @@ export default function VirtualTryOn() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-xl text-gray-600">Please log in to use Virtual Try-On</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-xl">Please log in to use Virtual Try-On</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
+      <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center bg-primary/10 px-6 py-3 rounded-full mb-4"
-          >
-            <Sparkles className="w-5 h-5 text-primary mr-2" />
-            <span className="font-semibold text-primary">AI-Powered Virtual Try-On</span>
-          </motion.div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Try Before You Buy
+          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            Virtual Try-On Room
           </h1>
-          <p className="text-xl text-gray-600">
-            Upload your photo and see how our products look on you
+          <p className="text-gray-600 dark:text-gray-300">
+            See how it fits before you buy. Powered by AI.
           </p>
         </div>
 
-        {/* Error Display */}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="max-w-3xl mx-auto mb-8 bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg flex items-start"
-          >
-            <AlertCircle className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="font-semibold">Error</p>
-              <p className="text-sm">{error}</p>
-            </div>
-          </motion.div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
-          {/* Left Panel - Upload & Select */}
-          <motion.div
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column: Controls */}
+          <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="bg-white rounded-xl shadow-lg p-8"
+            className="space-y-8"
           >
-            <h2 className="text-2xl font-bold mb-6 text-gray-900">Step 1: Upload Your Photo</h2>
-
-            {/* File Upload Area */}
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-3 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all ${
-                previewUrl 
-                  ? 'border-primary bg-primary/5' 
-                  : 'border-gray-300 hover:border-primary hover:bg-gray-50'
-              }`}
-            >
-              {previewUrl ? (
-                <div className="space-y-4">
-                  <img
-                    src={previewUrl}
-                    alt="Preview"
-                    className="max-h-64 mx-auto rounded-lg shadow-md"
-                  />
-                  <p className="text-sm text-gray-600">
-                    Click to change photo
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <Upload className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                  <p className="text-lg font-semibold text-gray-700 mb-2">
-                    Click to upload your photo
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    JPG or PNG • Max 5MB • Full body photos work best
-                  </p>
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
+            {/* Step 1: Upload Photo */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+              <h2 className="text-xl font-bold mb-4 flex items-center">
+                <span className="bg-primary text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">1</span>
+                Upload Your Photo
+              </h2>
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-primary transition group"
+              >
+                {previewUrl ? (
+                  <div className="relative h-64 w-full">
+                    <img 
+                      src={previewUrl} 
+                      alt="Preview" 
+                      className="h-full w-full object-contain rounded-lg"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                      <p className="text-white font-medium">Click to change photo</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
+                      <Upload className="w-8 h-8 text-primary" />
+                    </div>
+                    <p className="text-gray-500">Click to upload or drag and drop</p>
+                    <p className="text-xs text-gray-400">Supported: JPG, PNG (Max 5MB)</p>
+                  </div>
+                )}
+                <input 
+                  type="file" 
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  className="hidden" 
+                />
+              </div>
             </div>
 
-            {/* Product Selection */}
-            <div className="mt-8">
-              <h2 className="text-2xl font-bold mb-6 text-gray-900">
-                Step 2: Select a Product
+            {/* Step 2: Select Product */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+              <h2 className="text-xl font-bold mb-4 flex items-center">
+                <span className="bg-primary text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">2</span>
+                Select Product
               </h2>
               
               {products.length > 0 ? (
-                <div className="space-y-4">
-                  <select
-                    value={selectedProduct}
-                    onChange={(e) => setSelectedProduct(e.target.value)}
-                    className="w-full p-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-lg"
-                  >
-                    <option value="">Choose a clothing item...</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} - ₹{p.price}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* Product Preview */}
-                  {selectedProductData && (
-                    <div className="bg-gray-50 p-4 rounded-lg flex items-center space-x-4">
-                      <img
-                        src={selectedProductData.image_url}
-                        alt={selectedProductData.name}
-                        className="w-20 h-20 object-cover rounded-lg"
+                <div className="grid grid-cols-3 gap-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                  {products.map((product) => (
+                    <div 
+                      key={product.id}
+                      onClick={() => setSelectedProduct(product.id)}
+                      className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition ${
+                        selectedProduct === product.id 
+                          ? 'border-primary ring-2 ring-primary ring-opacity-50' 
+                          : 'border-transparent hover:border-gray-300'
+                      }`}
+                    >
+                      <img 
+                        src={product.image_url} 
+                        alt={product.name} 
+                        className="w-full h-24 object-cover"
                       />
-                      <div>
-                        <p className="font-semibold text-gray-900">
-                          {selectedProductData.name}
-                        </p>
-                        <p className="text-primary font-bold">
-                          ₹{selectedProductData.price}
-                        </p>
-                      </div>
+                      {selectedProduct === product.id && (
+                        <div className="absolute top-1 right-1 bg-primary text-white rounded-full p-1">
+                          <CheckCircle className="w-3 h-3" />
+                        </div>
+                      )}
+                      <p className="text-xs p-1 text-center truncate">{product.name}</p>
                     </div>
-                  )}
+                  ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Loader className="w-8 h-8 animate-spin mx-auto mb-2" />
-                  <p>Loading products...</p>
-                </div>
+                <p className="text-gray-500 text-center py-4">Loading clothing products...</p>
               )}
             </div>
 
-            {/* Generate Button */}
+            {/* Action Button */}
             <motion.button
-              whileTap={{ scale: 0.98 }}
+              whileTap={{ scale: 0.95 }}
               onClick={handleGenerate}
               disabled={loading || !selectedFile || !selectedProduct}
-              className="w-full mt-8 bg-gradient-to-r from-primary to-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:from-primary-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-lg flex items-center justify-center space-x-3"
+              className="w-full bg-gradient-to-r from-primary to-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center"
             >
               {loading ? (
                 <>
-                  <Loader className="w-6 h-6 animate-spin" />
-                  <span>Generating... This may take 30-60 seconds</span>
+                  <Loader className="w-6 h-6 animate-spin mr-2" />
+                  Processing (this may take ~60s)...
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-6 h-6" />
-                  <span>Generate Virtual Try-On</span>
+                  <Sparkles className="w-6 h-6 mr-2" />
+                  Generate Try-On
                 </>
               )}
             </motion.button>
-
-            {loading && (
-              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800 flex items-center">
-                  <Loader className="w-4 h-4 animate-spin mr-2" />
-                  AI is processing your image... Please wait patiently.
-                </p>
+            
+            {error && (
+              <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center">
+                <AlertCircle className="w-5 h-5 mr-2" />
+                {error}
               </div>
             )}
           </motion.div>
 
-          {/* Right Panel - Results */}
-          <motion.div
+          {/* Right Column: Results */}
+          <motion.div 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="bg-white rounded-xl shadow-lg p-8"
+            className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl min-h-[600px] flex flex-col"
           >
-            <h2 className="text-2xl font-bold mb-6 text-gray-900">Your Virtual Try-On Result</h2>
+            <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white border-b pb-4">
+              Result Preview
+            </h2>
 
             {result ? (
-              <div className="space-y-6">
+              <div className="flex-1 flex flex-col">
                 {result.success ? (
                   <>
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
-                      <CheckCircle className="w-5 h-5 text-green-600 mr-3" />
-                      <p className="text-green-800 font-semibold">
-                        Try-on generated successfully!
-                      </p>
-                    </div>
-
-                    {/* Generated Result */}
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700 mb-2">
-                        You wearing: {result.product_name}
-                      </p>
-                      <div className="relative rounded-lg overflow-hidden shadow-xl">
-                        <img
-                          src={result.generated_image}
-                          alt="Try-on result"
-                          className="w-full"
-                          onError={(e) => {
-                            console.error('Failed to load generated image')
-                            e.currentTarget.src = result.original_image
-                          }}
-                        />
-                        <div className="absolute top-4 right-4 bg-primary text-white px-3 py-1 rounded-full text-sm font-bold">
-                          AI Generated
-                        </div>
+                    <div className="relative flex-1 bg-gray-100 rounded-lg overflow-hidden mb-6">
+                      <img 
+                        src={result.generated_image} 
+                        alt="Virtual Try-On Result" 
+                        className="w-full h-full object-contain"
+                      />
+                      <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-sm">
+                        <p className="text-sm font-semibold text-gray-800">
+                          Wearing: {result.product_name}
+                        </p>
                       </div>
                     </div>
-
-                    {/* Comparison */}
+                    
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-gray-500 mb-2">Original Photo</p>
-                        <img
-                          src={result.original_image}
-                          alt="Original"
-                          className="w-full rounded-lg"
+                      <div className="bg-gray-50 p-2 rounded-lg">
+                        <p className="text-xs text-gray-500 mb-2">Original</p>
+                        <img 
+                          src={result.original_image} 
+                          alt="Original" 
+                          className="w-full h-24 object-cover rounded"
                         />
                       </div>
-                      <div>
+                      <div className="bg-gray-50 p-2 rounded-lg">
                         <p className="text-xs text-gray-500 mb-2">Product Image</p>
-                        <img
-                          src={selectedProductData?.image_url || result.product_image}
-                          alt="Product"
-                          className="w-full rounded-lg"
+                        <img 
+                          src={selectedProductData?.image_url || result.product_image} 
+                          alt="Product" 
+                          className="w-full h-24 object-contain rounded bg-white"
                         />
                       </div>
                     </div>
