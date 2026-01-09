@@ -17,7 +17,7 @@ interface TryOnResult {
   error?: string
 }
 
-// FIX: Added 'category' to interface to resolve Vercel build error
+// FIX: Added 'category' to the interface so TypeScript knows it exists
 interface Product {
   id: string
   name: string
@@ -43,7 +43,8 @@ export default function VirtualTryOn() {
     const fetchProducts = async () => {
       try {
         const response = await productAPI.getAll({ limit: 50 })
-        // This filter now works because Product interface has 'category'
+        // Now valid because Product interface includes 'category'
+        // We filter to only show 'clothing' items for try-on
         const clothingProducts = response.data.filter((p: Product) => p.category === 'clothing')
         setProducts(clothingProducts)
         
@@ -94,7 +95,9 @@ export default function VirtualTryOn() {
       if (response.data.success) {
         setResult(response.data)
       } else {
+        // Handle backend-reported error (e.g. AI service busy)
         setError(response.data.error || 'Generation failed')
+        // Show fallback images if available
         if (response.data.original_image) {
            setResult({
              success: false,
