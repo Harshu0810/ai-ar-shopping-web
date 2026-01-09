@@ -1,3 +1,4 @@
+// ai-backend/server.mjs
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -7,7 +8,19 @@ import { client } from "@gradio/client";
 import { createClient } from "@supabase/supabase-js";
 
 const app = express();
-app.use(cors({ origin: '*' }));
+
+// --- FIXED CORS SECTION ---
+// 1. Allow all origins (for now) to prevent blocking
+app.use(cors({
+  origin: '*', 
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// 2. Handle "Preflight" requests (The browser checks this before sending data)
+app.options('*', cors());
+// ---------------------------
+
 app.use(express.json());
 
 const supabase = createClient(
@@ -17,6 +30,9 @@ const supabase = createClient(
 
 app.post('/generate-tryon', async (req, res) => {
   const { personUrl, garmentUrl } = req.body;
+
+  // Manual CORS Header injection (Backup safety)
+  res.header("Access-Control-Allow-Origin", "*");
 
   if (!personUrl || !garmentUrl) {
     return res.status(400).json({ error: "Missing image URLs" });
@@ -42,6 +58,7 @@ app.post('/generate-tryon', async (req, res) => {
     if (error) throw error;
 
     const { data } = supabase.storage.from('try-on-results').getPublicUrl(filename);
+    
     res.json({ success: true, url: data.publicUrl });
 
   } catch (error) {
