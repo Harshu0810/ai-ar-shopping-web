@@ -29,4 +29,5 @@ PyJWT==2.8.0
 # Image Processing
 Pillow==10.2.0
 
-gradio_client>=1.3.0
+# AI/ML Virtual Try-On
+gradio_client==1.3.0
