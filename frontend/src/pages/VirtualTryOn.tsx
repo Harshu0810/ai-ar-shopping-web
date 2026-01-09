@@ -12,8 +12,8 @@ import { createClient } from '@supabase/supabase-js'
 // --- CONFIGURATION ---
 // 1. Setup Supabase Client (for uploading user image)
 // We try both Vite and Next.js env formats to be safe
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl!, supabaseKey!);
 
 // 2. Your AI Backend URL (from Koyeb)
