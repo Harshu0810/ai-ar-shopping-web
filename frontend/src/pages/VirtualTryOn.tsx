@@ -17,13 +17,13 @@ interface TryOnResult {
   error?: string
 }
 
-// FIX: Added 'category' to the interface so TypeScript knows it exists
+// FIX: Added 'category' here so TypeScript allows filtering by it
 interface Product {
   id: string
   name: string
   price: number
   image_url: string
-  category: string 
+  category: string
 }
 
 export default function VirtualTryOn() {
@@ -43,7 +43,7 @@ export default function VirtualTryOn() {
     const fetchProducts = async () => {
       try {
         const response = await productAPI.getAll({ limit: 50 })
-        // Now valid because Product interface includes 'category'
+        // This filter will now work because 'category' is in the interface
         const clothingProducts = response.data.filter((p: Product) => p.category === 'clothing')
         setProducts(clothingProducts)
         
