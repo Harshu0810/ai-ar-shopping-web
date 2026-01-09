@@ -9,7 +9,7 @@ export default function VirtualTryOn() {
   const [statusText, setStatusText] = useState("");
 
   // --- PASTE YOUR RENDER URL HERE ---
-  const BACKEND_URL = "https://your-render-app-name.onrender.com/generate-tryon"; 
+  const BACKEND_URL = "https://manual-yolanthe-rtu-cdac-9c6af2a0.koyeb.app/generate-tryon"; 
 
   useEffect(() => {
     let interval;
