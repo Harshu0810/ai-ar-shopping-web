@@ -1,4 +1,5 @@
 // frontend/src/pages/VirtualTryOn.tsx
+// COMPLETELY FIXED VERSION
 // ============================================================================
 
 import React, { useState, useRef, useEffect } from 'react'
@@ -9,15 +10,17 @@ import { motion } from 'framer-motion'
 import { Upload, Loader, AlertCircle, CheckCircle, Sparkles } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 
-// --- CONFIGURATION ---
-// 1. Setup Supabase Client (for uploading user image)
-// We try both Vite and Next.js env formats to be safe
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl!, supabaseKey!);
+// --- CONFIGURATION (using environment variables) ---
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const AI_BACKEND_URL = import.meta.env.VITE_AI_BACKEND_URL || 'http://localhost:3000'
 
-// 2. Your AI Backend URL (from Koyeb)
-const AI_BACKEND_URL = "https://manual-yolanthe-rtu-cdac-9c6af2a0.koyeb.app/generate-tryon";
+// Validate environment variables
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Missing Supabase configuration. Please check your .env file.')
+}
+
+const supabase = createClient(supabaseUrl!, supabaseKey!)
 
 interface TryOnResult {
   success: boolean
@@ -49,37 +52,50 @@ export default function VirtualTryOn() {
   
   // Loading & Progress State
   const [loading, setLoading] = useState(false)
-  const [loadingStep, setLoadingStep] = useState<string>("") // "Uploading..." or "Generating..."
+  const [loadingStep, setLoadingStep] = useState<string>('')
   const [error, setError] = useState<string>('')
   
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // 1. Load products on mount
+  // Load products on mount
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const response = await productAPI.getAll({ limit: 50 })
-        const clothingProducts = response.data.filter((p: Product) => p.category === 'clothing')
+        const clothingProducts = response.data.filter((p: Product) => 
+          p.category?.toLowerCase() === 'clothing'
+        )
         setProducts(clothingProducts)
         
-        if (location.state?.selectedProduct) {
-          setSelectedProduct(location.state.selectedProduct)
+        // Check if product was pre-selected from ProductDetail page
+        if (location.state?.productId) {
+          setSelectedProduct(location.state.productId)
         }
       } catch (error) {
         console.error('Failed to fetch products:', error)
+        setError('Failed to load products. Please refresh the page.')
       }
     }
     fetchProducts()
   }, [location.state])
 
-  // 2. Handle File Selection
+  // Handle File Selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
+      
+      // Validate file size (5MB max)
       if (file.size > 5 * 1024 * 1024) {
         alert('File size must be less than 5MB')
         return
       }
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file')
+        return
+      }
+      
       setSelectedFile(file)
       const url = URL.createObjectURL(file)
       setPreviewUrl(url)
@@ -88,10 +104,10 @@ export default function VirtualTryOn() {
     }
   }
 
-  // 3. The Main Function: Upload -> Generate
+  // Main Generate Function
   const handleGenerate = async () => {
     if (!selectedFile || !selectedProduct) {
-      alert('Please upload a photo and select a product')
+      setError('Please upload a photo and select a product')
       return
     }
 
@@ -100,51 +116,64 @@ export default function VirtualTryOn() {
     setResult(null)
 
     try {
-      // --- STEP A: Upload User Image to Supabase ---
-      setLoadingStep("Uploading your photo...")
+      // STEP A: Upload User Image to Supabase Storage
+      setLoadingStep('Uploading your photo...')
       
-      const fileName = `user_upload_${Date.now()}_${selectedFile.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+      const timestamp = Date.now()
+      const sanitizedName = selectedFile.name.replace(/[^a-zA-Z0-9.]/g, '')
+      const fileName = `user_${user?.id}_${timestamp}_${sanitizedName}`
       
-      // Upload to a 'public' bucket named 'uploads' (or 'images')
-      // Make sure this bucket exists in your Supabase Storage!
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('try-on-results') // We can reuse the same bucket
-        .upload(fileName, selectedFile);
+        .from('try-on-results')
+        .upload(fileName, selectedFile, {
+          contentType: selectedFile.type,
+          upsert: false
+        })
 
-      if (uploadError) throw new Error("Upload failed: " + uploadError.message);
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`)
+      }
 
-      // Get the Public URL of the uploaded file
+      // Get the public URL
       const { data: publicUrlData } = supabase.storage
         .from('try-on-results')
-        .getPublicUrl(fileName);
+        .getPublicUrl(fileName)
         
-      const userImageUrl = publicUrlData.publicUrl;
-      console.log("User Image URL:", userImageUrl);
+      const userImageUrl = publicUrlData.publicUrl
+      console.log('User Image URL:', userImageUrl)
 
-      // --- STEP B: Get Product Image URL ---
-      const product = products.find(p => p.id === selectedProduct);
-      if (!product) throw new Error("Product not found");
-      const garmentUrl = product.image_url;
+      // STEP B: Get Product Image URL
+      const product = products.find(p => p.id === selectedProduct)
+      if (!product) {
+        throw new Error('Product not found')
+      }
+      const garmentUrl = product.image_url
 
-      // --- STEP C: Call AI Backend (Koyeb) ---
-      setLoadingStep("AI is generating (approx 30s)...")
+      // STEP C: Call AI Backend
+      setLoadingStep('AI is generating your try-on (30-60 seconds)...')
       
-      const aiResponse = await fetch(AI_BACKEND_URL, {
+      const aiResponse = await fetch(`${AI_BACKEND_URL}/generate-tryon`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           personUrl: userImageUrl,
           garmentUrl: garmentUrl
         })
-      });
+      })
 
-      const aiData = await aiResponse.json();
-
-      if (!aiData.success) {
-        throw new Error(aiData.error || "AI Generation failed");
+      if (!aiResponse.ok) {
+        throw new Error(`AI service error: ${aiResponse.statusText}`)
       }
 
-      // --- STEP D: Show Result ---
+      const aiData = await aiResponse.json()
+
+      if (!aiData.success) {
+        throw new Error(aiData.error || 'AI generation failed')
+      }
+
+      // STEP D: Display Result
       setResult({
         success: true,
         original_image: userImageUrl,
@@ -155,19 +184,31 @@ export default function VirtualTryOn() {
 
     } catch (err: any) {
       console.error('Try-on failed:', err)
-      setError(err.message || 'Failed to generate image')
+      setError(err.message || 'Failed to generate try-on. Please try again.')
     } finally {
       setLoading(false)
-      setLoadingStep("")
+      setLoadingStep('')
     }
   }
+
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
 
   const selectedProductData = products.find(p => p.id === selectedProduct)
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-xl">Please log in to use Virtual Try-On</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-xl text-gray-600">Please log in to use Virtual Try-On</p>
+        </div>
       </div>
     )
   }
@@ -193,7 +234,7 @@ export default function VirtualTryOn() {
           >
             {/* Step 1: Upload Photo */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
-              <h2 className="text-xl font-bold mb-4 flex items-center">
+              <h2 className="text-xl font-bold mb-4 flex items-center text-gray-800 dark:text-white">
                 <span className="bg-primary text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">1</span>
                 Upload Your Photo
               </h2>
@@ -233,17 +274,20 @@ export default function VirtualTryOn() {
 
             {/* Step 2: Select Product */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
-              <h2 className="text-xl font-bold mb-4 flex items-center">
+              <h2 className="text-xl font-bold mb-4 flex items-center text-gray-800 dark:text-white">
                 <span className="bg-primary text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">2</span>
                 Select Product
               </h2>
               
               {products.length > 0 ? (
-                <div className="grid grid-cols-3 gap-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                <div className="grid grid-cols-3 gap-4 max-h-64 overflow-y-auto pr-2">
                   {products.map((product) => (
                     <div 
                       key={product.id}
-                      onClick={() => setSelectedProduct(product.id)}
+                      onClick={() => {
+                        setSelectedProduct(product.id)
+                        setError('')
+                      }}
                       className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition ${
                         selectedProduct === product.id 
                           ? 'border-primary ring-2 ring-primary ring-opacity-50' 
@@ -260,7 +304,9 @@ export default function VirtualTryOn() {
                           <CheckCircle className="w-3 h-3" />
                         </div>
                       )}
-                      <p className="text-xs p-1 text-center truncate">{product.name}</p>
+                      <p className="text-xs p-1 text-center truncate text-gray-700 dark:text-gray-300">
+                        {product.name}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -268,6 +314,14 @@ export default function VirtualTryOn() {
                 <p className="text-gray-500 text-center py-4">Loading clothing products...</p>
               )}
             </div>
+
+            {/* Error Display */}
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-lg flex items-center">
+                <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
             {/* Action Button */}
             <motion.button
@@ -288,13 +342,6 @@ export default function VirtualTryOn() {
                 </>
               )}
             </motion.button>
-            
-            {error && (
-              <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center">
-                <AlertCircle className="w-5 h-5 mr-2" />
-                {error}
-              </div>
-            )}
           </motion.div>
 
           {/* Right Column: Results */}
@@ -309,44 +356,44 @@ export default function VirtualTryOn() {
 
             {result ? (
               <div className="flex-1 flex flex-col">
-                <div className="relative flex-1 bg-gray-100 rounded-lg overflow-hidden mb-6">
+                <div className="relative flex-1 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-6">
                   <img 
                     src={result.generated_image} 
                     alt="Virtual Try-On Result" 
                     className="w-full h-full object-contain"
                   />
-                  <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-sm">
-                    <p className="text-sm font-semibold text-gray-800">
+                  <div className="absolute bottom-4 right-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur px-4 py-2 rounded-full shadow-sm">
+                    <p className="text-sm font-semibold text-gray-800 dark:text-white">
                       Wearing: {result.product_name}
                     </p>
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-50 p-2 rounded-lg">
-                    <p className="text-xs text-gray-500 mb-2">Original</p>
+                  <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded-lg">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Original</p>
                     <img 
                       src={result.original_image} 
                       alt="Original" 
                       className="w-full h-24 object-cover rounded"
                     />
                   </div>
-                  <div className="bg-gray-50 p-2 rounded-lg">
-                    <p className="text-xs text-gray-500 mb-2">Product</p>
+                  <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded-lg">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Product</p>
                     <img 
                       src={selectedProductData?.image_url || result.product_image} 
                       alt="Product" 
-                      className="w-full h-24 object-contain rounded bg-white"
+                      className="w-full h-24 object-contain rounded bg-white dark:bg-gray-600"
                     />
                   </div>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center py-16">
-                <div className="bg-gray-100 rounded-full p-8 mb-6">
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-full p-8 mb-6">
                   <Sparkles className="w-16 h-16 text-gray-400" />
                 </div>
-                <p className="text-gray-500 text-lg">
+                <p className="text-gray-500 dark:text-gray-400 text-lg">
                   Upload your photo and select a product to see the magic! ✨
                 </p>
               </div>
