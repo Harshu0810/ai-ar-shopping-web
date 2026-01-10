@@ -35,13 +35,8 @@ app.post('/generate-tryon', async (req, res) => {
 
     // 2. CONNECT TO AI (Official Space)
     console.log("Connecting to yisol/IDM-VTON...");
-    
-    // --- HARDCODE TOKEN HERE FOR TESTING ---
-    // Replace the text inside quotes with your actual hf_... token
-    const MY_TOKEN = "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"; 
-    // ---------------------------------------
 
-    const hf_app = await client("yisol/IDM-VTON", { hf_token: MY_TOKEN });
+    const hf_app = await client("yisol/IDM-VTON",{ hf_token: process.env.HF_TOKEN });
 
     console.log("✅ Connected! Predicting...");
 
