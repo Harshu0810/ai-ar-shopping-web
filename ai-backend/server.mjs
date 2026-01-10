@@ -31,8 +31,10 @@ app.get('/', (req, res) => {
 });
 
 // --- 3. AI GENERATION ROUTE ---
+// ... inside server.mjs
+
 app.post('/generate-tryon', async (req, res) => {
-  console.log("Processing Request...");
+  console.log("🚀 Starting Try-On Request...");
   
   try {
     const { personUrl, garmentUrl } = req.body;
@@ -41,8 +43,24 @@ app.post('/generate-tryon', async (req, res) => {
     // Initialize Supabase
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-    // Call AI
-    const hf_app = await client("human37/IDM-VTON", { hf_token: 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 });
+    // --- UPDATED AI CONNECTION ---
+    // 1. Hardcode your token here to be 100% sure it works
+    const MY_HF_TOKEN = "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"; // <--- PASTE YOUR TOKEN HERE
+
+    console.log("Connecting to AI...");
+    
+    // 2. Connect with a fallback (Try human37 first, then yisol)
+    let hf_app;
+    try {
+        hf_app = await client("human37/IDM-VTON", { hf_token: MY_HF_TOKEN });
+    } catch (e) {
+        console.log("human37 failed, trying yisol...");
+        hf_app = await client("yisol/IDM-VTON", { hf_token: MY_HF_TOKEN });
+    }
+
+    console.log("✅ AI Connected. Predicting...");
+
+    // 3. Run Prediction
     const result = await hf_app.predict("/tryon", [
       { "background": await fetch(personUrl).then(r => r.blob()), "layers": [], "composite": null },
       await fetch(garmentUrl).then(r => r.blob()),
@@ -59,12 +77,13 @@ app.post('/generate-tryon', async (req, res) => {
     if (error) throw error;
 
     const { data } = supabase.storage.from('try-on-results').getPublicUrl(filename);
+    console.log("✅ Finished:", data.publicUrl);
     
     res.json({ success: true, url: data.publicUrl });
 
   } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: error.message || "Failed to generate" });
+    console.error("❌ CRITICAL ERROR:", error);
+    res.status(500).json({ error: error.message || "Server Error" });
   }
 });
 
