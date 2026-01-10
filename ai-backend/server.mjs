@@ -42,7 +42,7 @@ app.post('/generate-tryon', async (req, res) => {
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
     // Call AI
-    const hf_app = await client("human37/IDM-VTON", { hf_token: process.env.HF_TOKEN });
+    const hf_app = await client("jallenjia/Change-Clothes-AI", { hf_token: process.env.HF_TOKEN });
     const result = await hf_app.predict("/tryon", [
       { "background": await fetch(personUrl).then(r => r.blob()), "layers": [], "composite": null },
       await fetch(garmentUrl).then(r => r.blob()),
