@@ -1,4 +1,4 @@
-# BACKEND: routes/wishlist.py 
+# BACKEND: routes/wishlist.py
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from middleware.auth_middleware import get_current_user
