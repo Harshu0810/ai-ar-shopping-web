@@ -1,7 +1,4 @@
 // frontend/src/pages/VirtualTryOn.tsx
-// COMPLETELY FIXED VERSION
-// ============================================================================
-
 import React, { useState, useRef, useEffect } from 'react'
 import { productAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -10,12 +7,10 @@ import { motion } from 'framer-motion'
 import { Upload, Loader, AlertCircle, CheckCircle, Sparkles } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 
-// --- CONFIGURATION (using environment variables) ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-const AI_BACKEND_URL = import.meta.env.VITE_AI_BACKEND_URL || 'http://localhost:3000'
+const AI_BACKEND_URL = import.meta.env.VITE_AI_BACKEND_URL || 'http://localhost:8000'
 
-// Validate environment variables
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase configuration. Please check your .env file.')
 }
@@ -43,54 +38,84 @@ export default function VirtualTryOn() {
   const { user } = useAuth()
   const location = useLocation()
   
-  // State
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string>('')
   const [selectedProduct, setSelectedProduct] = useState<string>('')
   const [products, setProducts] = useState<Product[]>([])
   const [result, setResult] = useState<TryOnResult | null>(null)
   
-  // Loading & Progress State
   const [loading, setLoading] = useState(false)
   const [loadingStep, setLoadingStep] = useState<string>('')
   const [error, setError] = useState<string>('')
+  const [fetchingProducts, setFetchingProducts] = useState(true)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load products on mount
+  // FIX: Load products with proper error handling
   useEffect(() => {
     const fetchProducts = async () => {
+      setFetchingProducts(true)
+      setError('')
+      
       try {
-        const response = await productAPI.getAll({ limit: 50 })
+        console.log('[TRYON] Fetching products...')
+        
+        // FIX: Fetch all products first, then filter on frontend
+        const response = await productAPI.getAll({ limit: 100 })
+        
+        console.log('[TRYON] Received products:', response.data)
+        
+        if (!response.data || response.data.length === 0) {
+          setError('No products available. Please add products to the database.')
+          setProducts([])
+          return
+        }
+        
+        // FIX: Filter for clothing items (case-insensitive)
         const clothingProducts = response.data.filter((p: Product) => 
-          p.category?.toLowerCase() === 'clothing'
+          p.category && p.category.toLowerCase() === 'clothing'
         )
+        
+        console.log('[TRYON] Clothing products:', clothingProducts.length)
+        
+        if (clothingProducts.length === 0) {
+          setError('No clothing products available for try-on.')
+          setProducts([])
+          return
+        }
+        
         setProducts(clothingProducts)
         
-        // Check if product was pre-selected from ProductDetail page
+        // Pre-select product if passed from ProductDetail page
         if (location.state?.productId) {
-          setSelectedProduct(location.state.productId)
+          const productExists = clothingProducts.find(
+            (p: Product) => p.id === location.state.productId
+          )
+          if (productExists) {
+            setSelectedProduct(location.state.productId)
+          }
         }
-      } catch (error) {
-        console.error('Failed to fetch products:', error)
-        setError('Failed to load products. Please refresh the page.')
+      } catch (err: any) {
+        console.error('[TRYON] Failed to fetch products:', err)
+        setError(`Failed to load products: ${err.response?.data?.detail || err.message || 'Unknown error'}`)
+        setProducts([])
+      } finally {
+        setFetchingProducts(false)
       }
     }
+    
     fetchProducts()
   }, [location.state])
 
-  // Handle File Selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
       
-      // Validate file size (5MB max)
       if (file.size > 5 * 1024 * 1024) {
         alert('File size must be less than 5MB')
         return
       }
       
-      // Validate file type
       if (!file.type.startsWith('image/')) {
         alert('Please upload an image file')
         return
@@ -104,7 +129,6 @@ export default function VirtualTryOn() {
     }
   }
 
-  // Main Generate Function
   const handleGenerate = async () => {
     if (!selectedFile || !selectedProduct) {
       setError('Please upload a photo and select a product')
@@ -116,7 +140,6 @@ export default function VirtualTryOn() {
     setResult(null)
 
     try {
-      // STEP A: Upload User Image to Supabase Storage
       setLoadingStep('Uploading your photo...')
       
       const timestamp = Date.now()
@@ -134,7 +157,6 @@ export default function VirtualTryOn() {
         throw new Error(`Upload failed: ${uploadError.message}`)
       }
 
-      // Get the public URL
       const { data: publicUrlData } = supabase.storage
         .from('try-on-results')
         .getPublicUrl(fileName)
@@ -142,14 +164,12 @@ export default function VirtualTryOn() {
       const userImageUrl = publicUrlData.publicUrl
       console.log('User Image URL:', userImageUrl)
 
-      // STEP B: Get Product Image URL
       const product = products.find(p => p.id === selectedProduct)
       if (!product) {
         throw new Error('Product not found')
       }
       const garmentUrl = product.image_url
 
-      // STEP C: Call AI Backend
       setLoadingStep('AI is generating your try-on (30-60 seconds)...')
       
       const aiResponse = await fetch(`${AI_BACKEND_URL}/generate-tryon`, {
@@ -173,7 +193,6 @@ export default function VirtualTryOn() {
         throw new Error(aiData.error || 'AI generation failed')
       }
 
-      // STEP D: Display Result
       setResult({
         success: true,
         original_image: userImageUrl,
@@ -191,7 +210,6 @@ export default function VirtualTryOn() {
     }
   }
 
-  // Cleanup preview URL on unmount
   useEffect(() => {
     return () => {
       if (previewUrl) {
@@ -279,7 +297,12 @@ export default function VirtualTryOn() {
                 Select Product
               </h2>
               
-              {products.length > 0 ? (
+              {fetchingProducts ? (
+                <div className="text-center py-8">
+                  <Loader className="w-8 h-8 animate-spin mx-auto text-primary mb-2" />
+                  <p className="text-gray-500">Loading clothing products...</p>
+                </div>
+              ) : products.length > 0 ? (
                 <div className="grid grid-cols-3 gap-4 max-h-64 overflow-y-auto pr-2">
                   {products.map((product) => (
                     <div 
@@ -311,7 +334,11 @@ export default function VirtualTryOn() {
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500 text-center py-4">Loading clothing products...</p>
+                <div className="text-center py-8 text-red-600">
+                  <AlertCircle className="w-12 h-12 mx-auto mb-2" />
+                  <p>No clothing products available</p>
+                  <p className="text-sm mt-2">Please add clothing items to the database</p>
+                </div>
               )}
             </div>
 
@@ -327,7 +354,7 @@ export default function VirtualTryOn() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleGenerate}
-              disabled={loading || !selectedFile || !selectedProduct}
+              disabled={loading || !selectedFile || !selectedProduct || products.length === 0}
               className="w-full bg-gradient-to-r from-primary to-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center"
             >
               {loading ? (
