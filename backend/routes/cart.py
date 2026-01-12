@@ -1,9 +1,10 @@
-# BACKEND: routes/cart.py
+# BACKEND: routes/cart.py - FIXED VERSION
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from middleware.auth_middleware import get_current_user
 import os
 from supabase import create_client, Client
+from datetime import datetime
 
 router = APIRouter()
 supabase: Client = create_client(
@@ -22,11 +23,15 @@ class CartItemUpdate(BaseModel):
 async def get_cart(current_user: dict = Depends(get_current_user)):
     """Get user's cart with product details"""
     try:
+        # FIX: Use proper join syntax for Supabase
         response = supabase.table("cart_items").select(
-            "*, products(*)"
+            "id, product_id, quantity, created_at, updated_at, products(id, name, price, discount_price, image_url, stock_quantity)"
         ).eq("user_id", current_user["id"]).execute()
+        
+        print(f"[CART] Fetched {len(response.data)} items for user {current_user['id']}")
         return response.data
     except Exception as e:
+        print(f"[CART ERROR] {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch cart: {str(e)}")
 
 @router.post("/items")
@@ -36,6 +41,7 @@ async def add_to_cart(
 ):
     """Add item to cart or update quantity if exists"""
     try:
+        # Verify product exists
         product_check = supabase.table("products").select("id, stock_quantity").eq(
             "id", item.product_id
         ).execute()
@@ -45,17 +51,20 @@ async def add_to_cart(
         
         product = product_check.data[0]
         
+        # Check stock
         if product["stock_quantity"] < item.quantity:
             raise HTTPException(
                 status_code=400, 
                 detail=f"Only {product['stock_quantity']} items available"
             )
         
+        # Check if already in cart
         existing = supabase.table("cart_items").select("*").eq(
             "user_id", current_user["id"]
         ).eq("product_id", item.product_id).execute()
         
         if existing.data:
+            # Update existing cart item
             new_quantity = existing.data[0]['quantity'] + item.quantity
             
             if product["stock_quantity"] < new_quantity:
@@ -65,22 +74,31 @@ async def add_to_cart(
                 )
             
             response = supabase.table("cart_items").update({
-                "quantity": new_quantity
+                "quantity": new_quantity,
+                "updated_at": datetime.utcnow().isoformat()
             }).eq("id", existing.data[0]['id']).execute()
             
+            print(f"[CART] Updated item {existing.data[0]['id']} to quantity {new_quantity}")
             return {"message": "Cart updated", "data": response.data[0]}
         else:
-            response = supabase.table("cart_items").insert({
+            # Insert new cart item - FIX: Add all required fields
+            insert_data = {
                 "user_id": current_user["id"],
                 "product_id": item.product_id,
-                "quantity": item.quantity
-            }).execute()
+                "quantity": item.quantity,
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
             
+            response = supabase.table("cart_items").insert(insert_data).execute()
+            
+            print(f"[CART] Added new item: {item.product_id} with quantity {item.quantity}")
             return {"message": "Added to cart", "data": response.data[0]}
     
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[CART ERROR] {str(e)}")
         raise HTTPException(status_code=400, detail=f"Failed: {str(e)}")
 
 @router.put("/items/{item_id}")
@@ -94,6 +112,7 @@ async def update_cart_item(
         if item.quantity < 1:
             raise HTTPException(status_code=400, detail="Quantity must be at least 1")
         
+        # Get cart item with product info
         cart_item = supabase.table("cart_items").select(
             "*, products(stock_quantity)"
         ).eq("id", item_id).eq("user_id", current_user["id"]).execute()
@@ -109,7 +128,8 @@ async def update_cart_item(
             )
         
         response = supabase.table("cart_items").update({
-            "quantity": item.quantity
+            "quantity": item.quantity,
+            "updated_at": datetime.utcnow().isoformat()
         }).eq("id", item_id).eq("user_id", current_user["id"]).execute()
         
         return {"message": "Cart updated", "data": response.data[0] if response.data else {}}
