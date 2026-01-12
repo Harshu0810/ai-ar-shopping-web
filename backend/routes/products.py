@@ -36,10 +36,10 @@ async def get_products(
         query = supabase.table("products").select("*")
         
         if category:
-            query = query.eq("category", category)
+            query = query.ilike("category", category)
         
         response = query.range(offset, offset + limit - 1).execute()
-        return response.data
+        return response.data if response.data else []
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch products: {str(e)}")
 
@@ -50,7 +50,7 @@ async def search_products(q: str = Query(..., min_length=1)):
         response = supabase.table("products").select("*").ilike(
             "name", f"%{q}%"
         ).execute()
-        return response.data
+        return response.data if response.data else []
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
@@ -61,7 +61,7 @@ async def get_by_category(category_name: str):
         response = supabase.table("products").select("*").eq(
             "category", category_name
         ).execute()
-        return response.data
+        return response.data if response.data else []
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch category: {str(e)}")
 
@@ -76,7 +76,7 @@ async def get_product(product_id: str):
         if not response.data:
             raise HTTPException(status_code=404, detail="Product not found")
         
-        return response.data
+        return response.data if response.data else []
     except HTTPException:
         raise
     except Exception as e:
